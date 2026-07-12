@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Buddy AI</title>
+<style>
+/* ===== PAGE ===== */
+body{
+ margin:0;
+ font-family:Arial,sans-serif;
+ background:#08131d;
+ color:white;
+ display:flex;
+ justify-content:center;
+ align-items:center;
+ height:100vh;
+}
+/* ===== MAIN PANEL ===== */
+.container{
+ width:420px;
+ background:#102232;
+ border:2px solid cyan;
+ border-radius:15px;
+ padding:20px;
+ box-shadow:0 0 15px cyan;
+}
+/* ===== TITLE ===== */
+h1{text-align:center;color:cyan;}
+/* ===== CHAT AREA ===== */
+#chat{
+ height:250px;
+ overflow-y:auto;
+ border:1px solid #3aa;
+ border-radius:10px;
+ padding:10px;
+ margin-bottom:10px;
+}
+/* ===== INPUT ===== */
+input{
+ width:70%;
+ padding:10px;
+ border-radius:8px;
+ border:none;
+}
+button{
+ padding:10px;
+ border:none;
+ border-radius:8px;
+ background:cyan;
+ cursor:pointer;
+}
+button:hover{background:#7ff;}
+</style>
+</head>
+<body>
+
+<div class="container">
+<h1>🤖 Buddy AI</h1>
+
+<!-- Chat messages appear here -->
+<div id="chat"></div>
+
+<!-- User types here -->
+<input id="message" placeholder="Type or use microphone">
+<button onclick="sendMessage()">Send</button>
+<button onclick="listen()">🎤</button>
+
+</div>
+
+<script>
+// ===== Find chat area =====
+const chat=document.getElementById("chat");
+
+// ===== Send message to Flask =====
+async function sendMessage(){
+ const input=document.getElementById("message");
+ const msg=input.value.trim();
+ if(msg==="") return;
+
+ chat.innerHTML+="<p><b>You:</b> "+msg+"</p>";
+ input.value="";
+
+ const response=await fetch("/chat",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({message:msg})
+ });
+
+ const data=await response.json();
+
+ chat.innerHTML+="<p><b>Buddy:</b> "+data.reply+"</p>";
+
+ // ===== Buddy speaks =====
+ speechSynthesis.cancel();
+// Buddy speaks in Hindi
+const speech = new SpeechSynthesisUtterance(data.reply);
+
+// Set Hindi language
+speech.lang = "hi-IN";
+
+// Speaking speed
+speech.rate = 0.9;
+
+// Voice pitch
+speech.pitch = 1;
+
+// Speak
+window.speechSynthesis.cancel();
+window.speechSynthesis.speak(speech);
+
+ chat.scrollTop=chat.scrollHeight;
+}
+
+// ===== Browser microphone =====
+const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+
+function listen(){
+ if(!SpeechRecognition){
+   alert("Speech recognition is not supported in this browser.");
+   return;
+ }
+ const recognition=new SpeechRecognition();
+ recognition.lang="en-US";
+
+ recognition.onresult=function(event){
+   document.getElementById("message").value=event.results[0][0].transcript;
+   sendMessage();
+ };
+
+ recognition.start();
+}
+</script>
+
+</body>
+</html>
