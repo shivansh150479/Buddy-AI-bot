@@ -1,136 +1,166 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Buddy AI</title>
-<style>
-/* ===== PAGE ===== */
-body{
- margin:0;
- font-family:Arial,sans-serif;
- background:#08131d;
- color:white;
- display:flex;
- justify-content:center;
- align-items:center;
- height:100vh;
-}
-/* ===== MAIN PANEL ===== */
-.container{
- width:420px;
- background:#102232;
- border:2px solid cyan;
- border-radius:15px;
- padding:20px;
- box-shadow:0 0 15px cyan;
-}
-/* ===== TITLE ===== */
-h1{text-align:center;color:cyan;}
-/* ===== CHAT AREA ===== */
-#chat{
- height:250px;
- overflow-y:auto;
- border:1px solid #3aa;
- border-radius:10px;
- padding:10px;
- margin-bottom:10px;
-}
-/* ===== INPUT ===== */
-input{
- width:70%;
- padding:10px;
- border-radius:8px;
- border:none;
-}
-button{
- padding:10px;
- border:none;
- border-radius:8px;
- background:cyan;
- cursor:pointer;
-}
-button:hover{background:#7ff;}
-</style>
-</head>
-<body>
+from flask import Flask, render_template, request, jsonify
+import speech_recognition as sr
+import pyttsx3
+from google import genai
+from datetime import datetime
 
-<div class="container">
-<h1>🤖 Buddy AI</h1>
+app = Flask(__name__)
 
-<!-- Chat messages appear here -->
-<div id="chat"></div>
+# =========================
+# GEMINI SETUP
+# =========================
 
-<!-- User types here -->
-<input id="message" placeholder="Type or use microphone">
-<button onclick="sendMessage()">Send</button>
-<button onclick="listen()">🎤</button>
+GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"
 
-</div>
+client = genai.Client(api_key=GEMINI_API_KEY)
 
-<script>
-// ===== Find chat area =====
-const chat=document.getElementById("chat");
 
-// ===== Send message to Flask =====
-async function sendMessage(){
- const input=document.getElementById("message");
- const msg=input.value.trim();
- if(msg==="") return;
+# =========================
+# TEXT TO SPEECH
+# =========================
 
- chat.innerHTML+="<p><b>You:</b> "+msg+"</p>";
- input.value="";
+engine = pyttsx3.init()
+engine.setProperty("rate", 170)
 
- const response=await fetch("/chat",{
-   method:"POST",
-   headers:{"Content-Type":"application/json"},
-   body:JSON.stringify({message:msg})
- });
 
- const data=await response.json();
+def speak(text):
+    engine.say(text)
+    engine.runAndWait()
 
- chat.innerHTML+="<p><b>Buddy:</b> "+data.reply+"</p>";
 
- // ===== Buddy speaks =====
- speechSynthesis.cancel();
-// Buddy speaks in Hindi
-const speech = new SpeechSynthesisUtterance(data.reply);
+# =========================
+# HOME PAGE
+# =========================
 
-// Set Hindi language
-speech.lang = "hi-IN";
+@app.route("/")
+def home():
+    return render_template("index.html")
 
-// Speaking speed
-speech.rate = 0.9;
 
-// Voice pitch
-speech.pitch = 1;
+# =========================
+# CHAT
+# =========================
 
-// Speak
-window.speechSynthesis.cancel();
-window.speechSynthesis.speak(speech);
+@app.route("/chat", methods=["POST"])
+def chat():
 
- chat.scrollTop=chat.scrollHeight;
-}
+    data = request.get_json()
 
-// ===== Browser microphone =====
-const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if not data or "message" not in data:
+        return jsonify({"reply": "Buddy didn't receive your message."})
 
-function listen(){
- if(!SpeechRecognition){
-   alert("Speech recognition is not supported in this browser.");
-   return;
- }
- const recognition=new SpeechRecognition();
- recognition.lang="en-US";
+    message = data["message"].strip()
+    lower_message = message.lower()
 
- recognition.onresult=function(event){
-   document.getElementById("message").value=event.results[0][0].transcript;
-   sendMessage();
- };
+    # =========================
+    # BUDDY PERSONALITY
+    # =========================
 
- recognition.start();
-}
-</script>
+    if "hello" in lower_message:
+        reply = "Hello! Aur buddy kaaisse ho? 😎"
 
-</body>
-</html>
+    elif "joke" in lower_message:
+        reply = "I don't have time to tell you a joke. I am busy. Go study, it's 11! 😂"
+
+    elif "made" in lower_message:
+        reply = "I am made by Shivansh Bajpai."
+
+    elif "time" in lower_message:
+        reply = datetime.now().strftime("%I:%M %p")
+
+    elif "your name" in lower_message:
+        reply = "My name is Buddy. 🤖"
+
+    elif "dog" in lower_message:
+        reply = "You are a dog, I am Buddy! 😂"
+
+    elif "mc" in lower_message:
+        reply = "You BC 😂"
+
+    elif "dont know anything" in lower_message:
+        reply = "I am learning, but what are you doing? Wasting your time! 😂"
+
+    # =========================
+    # GEMINI
+    # =========================
+
+    else:
+
+        try:
+
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=f"""
+You are Buddy, a friendly personal AI assistant.
+
+Your creator is Shivansh Bajpai.
+
+Answer naturally and helpfully.
+Keep your answers reasonably concise unless the user asks for detail.
+
+User message:
+{message}
+"""
+            )
+
+            reply = response.text
+
+        except Exception as e:
+
+            print("GEMINI ERROR:")
+            print(e)
+
+            reply = "Sorry bro, Gemini is not working right now. Check the API key or internet connection."
+
+
+    # =========================
+    # OPTIONAL VOICE
+    # =========================
+
+    # speak(reply)
+
+
+    return jsonify({
+        "reply": reply
+    })
+
+
+# =========================
+# VOICE LISTENING
+# =========================
+
+@app.route("/listen")
+def listen():
+
+    recognizer = sr.Recognizer()
+
+    try:
+
+        with sr.Microphone() as source:
+
+            print("Listening...")
+
+            recognizer.adjust_for_ambient_noise(source, duration=0.5)
+
+            audio = recognizer.listen(source)
+
+        text = recognizer.recognize_google(audio)
+
+        print("You said:", text)
+
+        return jsonify({
+            "text": text
+        })
+
+    except sr.UnknownValueError:
+
+        return jsonify({
+            "text": ""
+        })
+
+    except Exception as e:
+
+        print("VOICE ERROR:")
+        print(e)
+
+       
