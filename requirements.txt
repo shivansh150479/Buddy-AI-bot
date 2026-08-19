@@ -1,4 +1,5 @@
 Flask
+gunicorn
+google-generativeai
 SpeechRecognition
 pyttsx3
-PyAudio
